@@ -1,29 +1,268 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Password Hash Generator</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HQ Cryptographic Terminal</title>
     <style>
-        body { background: #111; color: #0f0; font-family: monospace; padding: 40px; text-align: center; }
-        input { padding: 10px; width: 300px; background: #000; color: #0f0; border: 1px solid #0f0; font-family: inherit; }
-        button { padding: 10px 20px; background: #0f0; border: none; font-weight: bold; cursor: pointer; }
-        #output { margin-top: 20px; font-size: 1.2em; color: #fff; word-break: break-all; max-width: 600px; margin-left: auto; margin-right: auto;}
+        :root {
+            --neon-green: #00ff66;
+            --dark-bg: #0a0f0d;
+            --panel-bg: #121b18;
+        }
+        body {
+            background-color: var(--dark-bg);
+            color: var(--neon-green);
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .terminal-box {
+            background-color: var(--panel-bg);
+            border: 2px solid var(--neon-green);
+            box-shadow: 0 0 15px rgba(0, 255, 102, 0.2);
+            padding: 30px;
+            width: 100%;
+            max-width: 500px;
+            border-radius: 5px;
+        }
+        h2, h3 { text-align: center; text-transform: uppercase; letter-spacing: 2px; }
+        .input-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-size: 0.9em; }
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            background: #000;
+            border: 1px solid var(--neon-green);
+            color: var(--neon-green);
+            font-family: inherit;
+            box-sizing: border-box;
+            border-radius: 3px;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background: var(--neon-green);
+            color: #000;
+            border: none;
+            font-weight: bold;
+            font-family: inherit;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: all 0.2s;
+        }
+        button:hover { background: #00cc52; box-shadow: 0 0 10px rgba(0,255,102,0.5); }
+        .hidden { display: none; }
+        .nav-tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+        .nav-tabs button { background: transparent; color: var(--neon-green); border: 1px solid var(--neon-green); }
+        .nav-tabs button.active { background: var(--neon-green); color: #000; }
+        .output-box {
+            margin-top: 15px;
+            padding: 15px;
+            background: #000;
+            border: 1px dashed var(--neon-green);
+            min-height: 40px;
+            word-wrap: break-word;
+        }
+        .msg-card { border: 1px solid #333; padding: 10px; margin-bottom: 10px; background: #070b09; }
+        .locked { color: #ff3333; }
     </style>
 </head>
 <body>
-    <h2>Password to SHA-256 Code Converter</h2>
-    <input type="text" id="pass" placeholder="Type your password here...">
-    <button onclick="generate()">Generate Hash</button>
-    <div id="output"></div>
+
+    <div id="login-screen" class="terminal-box">
+        <h2>System Authentication</h2>
+        <p id="login-error" style="color: #ff3333; text-align:center; font-size:0.8em;"></p>
+        <div class="input-group">
+            <label>Agent Username:</label>
+            <input type="text" id="username" autocomplete="off">
+        </div>
+        <div class="input-group">
+            <label>Clearance Password:</label>
+            <input type="password" id="password">
+        </div>
+        <button onclick="handleLogin()">Initialize Link</button>
+    </div>
+
+    <div id="dashboard" class="terminal-box hidden">
+        <h2>Agent Terminal: <span id="display-user"></span></h2>
+        
+        <div class="nav-tabs">
+            <button id="tab-btn-intel" class="active" onclick="switchTab('intel')">Intel Feed</button>
+            <button id="tab-btn-crypto" onclick="switchTab('crypto')">Cipher Core</button>
+        </div>
+
+        <div id="tab-intel">
+            <h3>Classified Briefings</h3>
+            <div id="message-container"></div>
+        </div>
+
+        <div id="tab-crypto" class="hidden">
+            <div class="nav-tabs" style="margin-bottom:15px;">
+                <button id="mode-btn-decrypt" class="active" onclick="switchMode('decrypt')">Decrypt</button>
+                <button id="mode-btn-encrypt" onclick="switchMode('encrypt')">Encrypt</button>
+            </div>
+
+            <h3 id="mode-title">Decryption Engine</h3>
+            
+            <div class="input-group">
+                <label>Layer 2: Caesar Codeword (from paper):</label>
+                <input type="text" id="caesar-key" placeholder="e.g., ORION">
+            </div>
+            <div class="input-group">
+                <label>Layer 3: Vigenere Page Number:</label>
+                <input type="number" id="vigenere-page" placeholder="e.g., 42">
+            </div>
+            
+            <button onclick="unlockFinalLayer()">Verify Cipher Keys</button>
+
+            <div id="otp-layer" class="hidden" style="margin-top:20px; border-top: 1px solid var(--neon-green); padding-top:15px;">
+                <label id="payload-label">Target Ciphertext:</label>
+                <textarea id="payload-input" rows="4" placeholder="Enter text here..."></textarea>
+                <button onclick="processFinalMessage()" style="margin-top:10px;">Execute Math</button>
+                
+                <label style="margin-top:15px;">Result Output:</label>
+                <div id="final-output" class="output-box"></div>
+            </div>
+        </div>
+    </div>
 
     <script>
-        async function generate() {
-            const str = document.getElementById('pass').value;
-            const utf8 = new TextEncoder().encode(str);
+        // SHA-256 Hashing helper to secure passwords locally
+        async function hash(string) {
+            const utf8 = new TextEncoder().encode(string);
             const hashBuffer = await crypto.subtle.digest('SHA-256', utf8);
             const hashArray = Array.from(new Uint8Array(hashBuffer));
-            const finalHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        // --- USER DATABASE CONFIGURATION ---
+        // Passwords here are pre-hashed. 
+        // "password123" becomes "e7c22dd036..."
+        // "spy77" becomes "ef27b0..."
+        const users = {
+            "alice": { 
+                hash: "8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4", // hi
+                clearance: "level-2"
+            },
+            "bob": { 
+                hash: "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8",  // password
+                clearance: "level-1"
+            }
+        };
+
+        // --- CLASSIFIED MESSAGES ---
+        const briefings = [
+            { id: 1, req: "level-1", title: "Operation Red Dawn", content: "Intercept shipment near the train tracks at midnight." },
+            { id: 2, req: "level-2", title: "Alpha clearance directive", content: "CRITICAL: The safe combo is changed to 8-4-2-1." }
+        ];
+
+        // --- TARGET CIPHER ANSWERS ---
+        // What must be typed into the puzzle boxes to unlock the OTP Pad
+        const VALID_CAESAR = "ORION";
+        const VALID_PAGE = "42";
+        // The mock OTP Key found on page 42 of the booklet
+        const BOOKLET_PAD_KEY = "SECRETBOOKPADKEYSECRETBOOKPADKEY"; 
+
+        let currentUser = null;
+        let currentMode = "decrypt";
+
+        // --- LOGIN ACTION ---
+        async function handleLogin() {
+            const userIn = document.getElementById('username').value.toLowerCase().trim();
+            const passIn = document.getElementById('password').value;
+            const errorDiv = document.getElementById('login-error');
+
+            if (users[userIn]) {
+                const inputHash = await hash(passIn);
+                if (inputHash === users[userIn].hash) {
+                    currentUser = users[userIn];
+                    document.getElementById('display-user').innerText = userIn.toUpperCase();
+                    document.getElementById('login-screen').classList.add('hidden');
+                    document.getElementById('dashboard').classList.remove('hidden');
+                    loadBriefings();
+                    return;
+                }
+            }
+            errorDiv.innerText = "ACCESS DENIED: INVALID CREDENTIALS";
+        }
+
+        // --- ROLE PRESENTATION FEED ---
+        function loadBriefings() {
+            const container = document.getElementById('message-container');
+            container.innerHTML = "";
+            briefings.forEach(b => {
+                const card = document.createElement('div');
+                card.className = "msg-card";
+                if (currentUser.clearance === "level-2" || b.req === currentUser.clearance) {
+                    card.innerHTML = `<strong>${b.title}</strong><p>${b.content}</p>`;
+                } else {
+                    card.innerHTML = `<strong class="locked">[LOCKED] ${b.title}</strong><p class="locked">Requires higher clearance level.</p>`;
+                }
+                container.appendChild(card);
+            });
+        }
+
+        // --- TAB CONTROLLER ---
+        function switchTab(tab) {
+            document.getElementById('tab-intel').classList.add('hidden');
+            document.getElementById('tab-crypto').classList.add('hidden');
+            document.getElementById('tab-btn-intel').classList.remove('active');
+            document.getElementById('tab-btn-crypto').classList.remove('active');
             
-            document.getElementById('output').innerHTML = `<strong>Your Hash String:</strong><br><br>${finalHash}`;
+            document.getElementById(`tab-${tab}`).classList.remove('hidden');
+            document.getElementById(`tab-btn-${tab}`).classList.add('active');
+        }
+
+        function switchMode(mode) {
+            currentMode = mode;
+            document.getElementById('mode-btn-decrypt').classList.remove('active');
+            document.getElementById('mode-btn-encrypt').classList.remove('active');
+            document.getElementById(`mode-btn-${mode}`).classList.add('active');
+
+            document.getElementById('mode-title').innerText = mode === "decrypt" ? "Decryption Engine" : "Encryption Engine";
+            document.getElementById('payload-label').innerText = mode === "decrypt" ? "Target Ciphertext:" : "Plaintext to Encrypt:";
+            document.getElementById('otp-layer').classList.add('hidden');
+            document.getElementById('final-output').innerText = "";
+        }
+
+        // --- PUZZLE KEY VERIFICATION ---
+        function unlockFinalLayer() {
+            const cKey = document.getElementById('caesar-key').value.toUpperCase().trim();
+            const pKey = document.getElementById('vigenere-page').value.trim();
+
+            if (cKey === VALID_CAESAR && pKey === VALID_PAGE) {
+                document.getElementById('otp-layer').classList.remove('hidden');
+                alert("Cipher parameters verified. Booklet Pad Link established.");
+            } else {
+                alert("AUTHENTICATION FAILURE: Bad math alignment parameters.");
+                document.getElementById('otp-layer').classList.add('hidden');
+            }
+        }
+
+        // --- MATH ENGINES (VIGENERE METHOD FOR OTP) ---
+        function processFinalMessage() {
+            const input = document.getElementById('payload-input').value.toUpperCase().replace(/[^A-Z]/g, '');
+            let result = "";
+            
+            for (let i = 0; i < input.length; i++) {
+                let inputChar = input.charCodeAt(i) - 65;
+                let keyChar = BOOKLET_PAD_KEY.charCodeAt(i % BOOKLET_PAD_KEY.length) - 65;
+                let targetCode;
+
+                if (currentMode === "decrypt") {
+                    targetCode = (inputChar - keyChar + 26) % 26;
+                } else {
+                    targetCode = (inputChar + keyChar) % 26;
+                }
+                result += String.fromCharCode(targetCode + 65);
+            }
+            document.getElementById('final-output').innerText = result;
         }
     </script>
 </body>
