@@ -133,137 +133,142 @@
     </div>
 
     <script>
-        // SHA-256 Hashing helper to secure passwords locally
-        async function hash(string) {
-            const utf8 = new TextEncoder().encode(string);
-            const hashBuffer = await crypto.subtle.digest('SHA-256', utf8);
-            const hashArray = Array.from(new Uint8Array(hashBuffer));
-            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+       // SHA-256 Hashing helper to secure passwords locally
+async function hash(string) {
+    const utf8 = new TextEncoder().encode(string);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', utf8);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// --- USER DATABASE CONFIGURATION ---
+// Ensure usernames here are strictly lowercase
+const users = {
+    "alice": { 
+        hash: "e7c22dd03610814b9496512834cd621835990060e2553027b7b1348a604b868e", // password123
+        clearance: "level-2"
+    },
+    "bob": { 
+        hash: "ef27b056345ecb498f39589d38c6b4122d4bbd90fa2c431b017b2d2db73b1ff0",  // spy77
+        clearance: "level-1"
+    }
+};
+
+// --- CLASSIFIED MESSAGES ---
+const briefings = [
+    { id: 1, req: "level-1", title: "Operation Red Dawn", content: "Intercept shipment near the train tracks at midnight." },
+    { id: 2, req: "level-2", title: "Alpha clearance directive", content: "CRITICAL: The safe combo is changed to 8-4-2-1." }
+];
+
+// --- TARGET CIPHER ANSWERS ---
+const VALID_CAESAR = "ORION";
+const VALID_PAGE = "42";
+const BOOKLET_PAD_KEY = "SECRETBOOKPADKEYSECRETBOOKPADKEY"; 
+
+let currentUser = null;
+let currentMode = "decrypt";
+
+// --- FIXED LOGIN ACTION ---
+async function handleLogin() {
+    const userIn = document.getElementById('username').value.toLowerCase().trim();
+    const passIn = document.getElementById('password').value;
+    const errorDiv = document.getElementById('login-error');
+
+    // Robust check to see if the username exists in our object keys
+    if (Object.prototype.hasOwnProperty.call(users, userIn)) {
+        const targetUser = users[userIn];
+        const inputHash = await hash(passIn);
+        
+        if (inputHash === targetUser.hash) {
+            currentUser = targetUser;
+            document.getElementById('display-user').innerText = userIn.toUpperCase();
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('dashboard').classList.remove('hidden');
+            loadBriefings();
+            errorDiv.innerText = ""; // Clear errors
+            return;
+        } else {
+            errorDiv.innerText = "ACCESS DENIED: INVALID PASSWORD";
+            return;
         }
+    }
+    
+    errorDiv.innerText = "ACCESS DENIED: UNKNOWN AGENT IDENTITY";
+}
 
-        // --- USER DATABASE CONFIGURATION ---
-        // Passwords here are pre-hashed. 
-        // "password123" becomes "e7c22dd036..."
-        // "spy77" becomes "ef27b0..."
-        const users = {
-            "alice": { 
-                hash: "8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4", // hi
-                clearance: "level-2"
-            },
-            "bob": { 
-                hash: "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8",  // password
-                clearance: "level-1"
-            }
-        };
-
-        // --- CLASSIFIED MESSAGES ---
-        const briefings = [
-            { id: 1, req: "level-1", title: "Operation Red Dawn", content: "Intercept shipment near the train tracks at midnight." },
-            { id: 2, req: "level-2", title: "Alpha clearance directive", content: "CRITICAL: The safe combo is changed to 8-4-2-1." }
-        ];
-
-        // --- TARGET CIPHER ANSWERS ---
-        // What must be typed into the puzzle boxes to unlock the OTP Pad
-        const VALID_CAESAR = "ORION";
-        const VALID_PAGE = "42";
-        // The mock OTP Key found on page 42 of the booklet
-        const BOOKLET_PAD_KEY = "SECRETBOOKPADKEYSECRETBOOKPADKEY"; 
-
-        let currentUser = null;
-        let currentMode = "decrypt";
-
-        // --- LOGIN ACTION ---
-        async function handleLogin() {
-            const userIn = document.getElementById('username').value.toLowerCase().trim();
-            const passIn = document.getElementById('password').value;
-            const errorDiv = document.getElementById('login-error');
-
-            if (users[userIn]) {
-                const inputHash = await hash(passIn);
-                if (inputHash === users[userIn].hash) {
-                    currentUser = users[userIn];
-                    document.getElementById('display-user').innerText = userIn.toUpperCase();
-                    document.getElementById('login-screen').classList.add('hidden');
-                    document.getElementById('dashboard').classList.remove('hidden');
-                    loadBriefings();
-                    return;
-                }
-            }
-            errorDiv.innerText = "ACCESS DENIED: INVALID CREDENTIALS";
+// --- ROLE PRESENTATION FEED ---
+function loadBriefings() {
+    const container = document.getElementById('message-container');
+    container.innerHTML = "";
+    briefings.forEach(b => {
+        const card = document.createElement('div');
+        card.className = "msg-card";
+        if (currentUser.clearance === "level-2" || b.req === currentUser.clearance) {
+            card.innerHTML = `<strong>${b.title}</strong><p>${b.content}</p>`;
+        } else {
+            card.innerHTML = `<strong class="locked">[LOCKED] ${b.title}</strong><p class="locked">Requires higher clearance level.</p>`;
         }
+        container.appendChild(card);
+    });
+}
 
-        // --- ROLE PRESENTATION FEED ---
-        function loadBriefings() {
-            const container = document.getElementById('message-container');
-            container.innerHTML = "";
-            briefings.forEach(b => {
-                const card = document.createElement('div');
-                card.className = "msg-card";
-                if (currentUser.clearance === "level-2" || b.req === currentUser.clearance) {
-                    card.innerHTML = `<strong>${b.title}</strong><p>${b.content}</p>`;
-                } else {
-                    card.innerHTML = `<strong class="locked">[LOCKED] ${b.title}</strong><p class="locked">Requires higher clearance level.</p>`;
-                }
-                container.appendChild(card);
-            });
+// --- TAB CONTROLLER ---
+function switchTab(tab) {
+    document.getElementById('tab-intel').classList.add('hidden');
+    document.getElementById('tab-crypto').classList.add('hidden');
+    document.getElementById('tab-btn-intel').classList.remove('active');
+    document.getElementById('tab-btn-crypto').classList.remove('active');
+    
+    document.getElementById(`tab-${tab}`).classList.remove('hidden');
+    document.getElementById(`tab-btn-${tab}`).classList.add('active');
+}
+
+// --- ENCRYPT/DECRYPT TOGGLE ---
+function switchMode(mode) {
+    currentMode = mode;
+    document.getElementById('mode-btn-decrypt').classList.remove('active');
+    document.getElementById('mode-btn-encrypt').classList.remove('active');
+    document.getElementById(`mode-btn-${mode}`).classList.add('active');
+
+    document.getElementById('mode-title').innerText = mode === "decrypt" ? "Decryption Engine" : "Encryption Engine";
+    document.getElementById('payload-label').innerText = mode === "decrypt" ? "Target Ciphertext:" : "Plaintext to Encrypt:";
+    document.getElementById('otp-layer').classList.add('hidden');
+    document.getElementById('final-output').innerText = "";
+}
+
+// --- PUZZLE KEY VERIFICATION ---
+function unlockFinalLayer() {
+    const cKey = document.getElementById('caesar-key').value.toUpperCase().trim();
+    const pKey = document.getElementById('vigenere-page').value.trim();
+
+    if (cKey === VALID_CAESAR && pKey === VALID_PAGE) {
+        document.getElementById('otp-layer').classList.remove('hidden');
+        alert("Cipher parameters verified. Booklet Pad Link established.");
+    } else {
+        alert("AUTHENTICATION FAILURE: Bad math alignment parameters.");
+        document.getElementById('otp-layer').classList.add('hidden');
+    }
+}
+
+// --- MATH ENGINES (VIGENERE METHOD FOR OTP) ---
+function processFinalMessage() {
+    const input = document.getElementById('payload-input').value.toUpperCase().replace(/[^A-Z]/g, '');
+    let result = "";
+    
+    for (let i = 0; i < input.length; i++) {
+        let inputChar = input.charCodeAt(i) - 65;
+        let keyChar = BOOKLET_PAD_KEY.charCodeAt(i % BOOKLET_PAD_KEY.length) - 65;
+        let targetCode;
+
+        if (currentMode === "decrypt") {
+            targetCode = (inputChar - keyChar + 26) % 26;
+        } else {
+            targetCode = (inputChar + keyChar) % 26;
         }
-
-        // --- TAB CONTROLLER ---
-        function switchTab(tab) {
-            document.getElementById('tab-intel').classList.add('hidden');
-            document.getElementById('tab-crypto').classList.add('hidden');
-            document.getElementById('tab-btn-intel').classList.remove('active');
-            document.getElementById('tab-btn-crypto').classList.remove('active');
-            
-            document.getElementById(`tab-${tab}`).classList.remove('hidden');
-            document.getElementById(`tab-btn-${tab}`).classList.add('active');
-        }
-
-        function switchMode(mode) {
-            currentMode = mode;
-            document.getElementById('mode-btn-decrypt').classList.remove('active');
-            document.getElementById('mode-btn-encrypt').classList.remove('active');
-            document.getElementById(`mode-btn-${mode}`).classList.add('active');
-
-            document.getElementById('mode-title').innerText = mode === "decrypt" ? "Decryption Engine" : "Encryption Engine";
-            document.getElementById('payload-label').innerText = mode === "decrypt" ? "Target Ciphertext:" : "Plaintext to Encrypt:";
-            document.getElementById('otp-layer').classList.add('hidden');
-            document.getElementById('final-output').innerText = "";
-        }
-
-        // --- PUZZLE KEY VERIFICATION ---
-        function unlockFinalLayer() {
-            const cKey = document.getElementById('caesar-key').value.toUpperCase().trim();
-            const pKey = document.getElementById('vigenere-page').value.trim();
-
-            if (cKey === VALID_CAESAR && pKey === VALID_PAGE) {
-                document.getElementById('otp-layer').classList.remove('hidden');
-                alert("Cipher parameters verified. Booklet Pad Link established.");
-            } else {
-                alert("AUTHENTICATION FAILURE: Bad math alignment parameters.");
-                document.getElementById('otp-layer').classList.add('hidden');
-            }
-        }
-
-        // --- MATH ENGINES (VIGENERE METHOD FOR OTP) ---
-        function processFinalMessage() {
-            const input = document.getElementById('payload-input').value.toUpperCase().replace(/[^A-Z]/g, '');
-            let result = "";
-            
-            for (let i = 0; i < input.length; i++) {
-                let inputChar = input.charCodeAt(i) - 65;
-                let keyChar = BOOKLET_PAD_KEY.charCodeAt(i % BOOKLET_PAD_KEY.length) - 65;
-                let targetCode;
-
-                if (currentMode === "decrypt") {
-                    targetCode = (inputChar - keyChar + 26) % 26;
-                } else {
-                    targetCode = (inputChar + keyChar) % 26;
-                }
-                result += String.fromCharCode(targetCode + 65);
-            }
-            document.getElementById('final-output').innerText = result;
-        }
+        result += String.fromCharCode(targetCode + 65);
+    }
+    document.getElementById('final-output').innerText = result;
+}
     </script>
 </body>
 </html>
